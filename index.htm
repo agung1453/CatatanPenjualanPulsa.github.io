@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catatan Penjualan Pulsa</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f9;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #ddd;
+    }
+    .input-container input, .input-container select, .input-container button {
+      padding: 8px;
+      margin: 5px;
+    }
+    .status-lunas {
+      color: green;
+    }
+    .status-hutang {
+      color: red;
+    }
+    .total-keuntungan {
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    .search-bar {
+      margin-bottom: 15px;
+      padding: 8px;
+      width: 100%;
+      max-width: 300px;
+    }
+    button {
+      cursor: pointer;
+    }
+    button.edit-btn {
+      background-color: #ffc107;
+    }
+    button.delete-btn {
+      background-color: #dc3545;
+      color: white;
+    }
+    button.update-btn {
+      background-color: #28a745;
+      color: white;
+    }
+    button.cancel-btn {
+      background-color: #6c757d;
+      color: white;
+    }
+    button.export-btn, button.import-btn {
+      margin-top: 10px;
+      padding: 8px 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Catatan Penjualan Pulsa</h1>
+
+  <!-- Form Input -->
+  <div class="input-container">
+    <input type="text" id="nama" placeholder="Nama Pelanggan">
+    <input type="text" id="no_pelanggan" placeholder="No Pelanggan">
+    <input type="text" id="jenis" placeholder="Jenis Pulsa">
+    <input type="number" id="harga_beli" placeholder="Harga Beli">
+    <input type="number" id="harga_jual" placeholder="Harga Jual">
+    <select id="status_pembayaran">
+      <option value="lunas">Lunas</option>
+      <option value="hutang">Hutang</option>
+    </select>
+    <button id="tambahData">Tambah Data</button>
+  </div>
+
+  <!-- Pencarian -->
+  <input type="text" class="search-bar" id="search" placeholder="Cari data..." oninput="searchData()">
+
+  <!-- Tabel Data -->
+  <table id="tabelPenjualan">
+    <thead>
+      <tr>
+        <th>Tanggal & Jam</th>
+        <th>Nama Pelanggan</th>
+        <th>No Pelanggan</th>
+        <th>Jenis</th>
+        <th>Harga Beli</th>
+        <th>Harga Jual</th>
+        <th>Keuntungan</th>
+        <th>Status Pembayaran</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody id="dataRows"></tbody>
+  </table>
+
+  <!-- Total Keuntungan -->
+  <div class="total-keuntungan">
+    Total Keuntungan: <span id="totalKeuntungan">Rp 0</span>
+  </div>
+
+  <!-- Export & Import -->
+  <button class="export-btn" onclick="exportData()">Export Data</button>
+  <button class="import-btn" onclick="document.getElementById('importFile').click()">Import Data</button>
+  <input type="file" id="importFile" style="display:none;" onchange="importData(event)">
+
+  <script>
+    let dataPenjualan = JSON.parse(localStorage.getItem('penjualanData')) || [];
+    let editingIndex = -1;
+
+    function formatRupiah(value) {
+      return `Rp ${value.toLocaleString('id-ID')}`;
+    }
+
+    function renderTable() {
+      const dataRows = document.getElementById('dataRows');
+      const totalKeuntungan = document.getElementById('totalKeuntungan');
+      dataRows.innerHTML = '';
+      let totalKeuntunganValue = 0;
+
+      dataPenjualan.forEach((data, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${data.tanggal}</td>
+          <td>${data.nama}</td>
+          <td>${data.no_pelanggan}</td>
+          <td>${data.jenis}</td>
+          <td>${formatRupiah(data.harga_beli)}</td>
+          <td>${formatRupiah(data.harga_jual)}</td>
+          <td>${formatRupiah(data.keuntungan)}</td>
+          <td class="${data.status === 'lunas' ? 'status-lunas' : 'status-hutang'}">${data.status}</td>
+          <td>
+            <button class="edit-btn" onclick="editData(${index})">Edit</button>
+            <button class="delete-btn" onclick="deleteData(${index})">Hapus</button>
+          </td>
+        `;
+        dataRows.appendChild(row);
+        totalKeuntunganValue += data.keuntungan;
+      });
+
+      totalKeuntungan.textContent = formatRupiah(totalKeuntunganValue);
+    }
+
+    function addData() {
+      const nama = document.getElementById('nama').value || '';
+      const noPelanggan = document.getElementById('no_pelanggan').value || '';
+      const jenis = document.getElementById('jenis').value || '';
+      const hargaBeli = parseInt(document.getElementById('harga_beli').value) || 0;
+      const hargaJual = parseInt(document.getElementById('harga_jual').value) || 0;
+      const status = document.getElementById('status_pembayaran').value;
+      const tanggal = new Date().toLocaleString();
+
+      const keuntungan = hargaJual - hargaBeli;
+
+      const newData = { tanggal, nama, no_pelanggan: noPelanggan, jenis, harga_beli: hargaBeli, harga_jual: hargaJual, keuntungan, status };
+
+      if (editingIndex === -1) {
+        dataPenjualan.unshift(newData);
+      } else {
+        const currentData = dataPenjualan[editingIndex];
+        dataPenjualan[editingIndex] = { ...currentData, nama, no_pelanggan: noPelanggan, jenis, harga_beli: hargaBeli, harga_jual: hargaJual, keuntungan, status };
+        editingIndex = -1;
+      }
+
+      localStorage.setItem('penjualanData', JSON.stringify(dataPenjualan));
+      renderTable();
+      clearInputs();
+    }
+
+    function editData(index) {
+      const data = dataPenjualan[index];
+      document.getElementById('nama').value = data.nama;
+      document.getElementById('no_pelanggan').value = data.no_pelanggan;
+      document.getElementById('jenis').value = data.jenis;
+      document.getElementById('harga_beli').value = data.harga_beli;
+      document.getElementById('harga_jual').value = data.harga_jual;
+      document.getElementById('status_pembayaran').value = data.status;
+      editingIndex = index;
+    }
+
+    function deleteData(index) {
+      if (confirm('Hapus data ini?')) {
+        dataPenjualan.splice(index, 1);
+        localStorage.setItem('penjualanData', JSON.stringify(dataPenjualan));
+        renderTable();
+      }
+    }
+
+    function searchData() {
+      const query = document.getElementById('search').value.toLowerCase();
+      const filteredData = dataPenjualan.filter(item =>
+        Object.values(item).some(val => String(val).toLowerCase().includes(query))
+      );
+      renderFilteredData(filteredData);
+    }
+
+    function renderFilteredData(data) {
+      const dataRows = document.getElementById('dataRows');
+      dataRows.innerHTML = '';
+      data.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${item.tanggal}</td>
+          <td>${item.nama}</td>
+          <td>${item.no_pelanggan}</td>
+          <td>${item.jenis}</td>
+          <td>${formatRupiah(item.harga_beli)}</td>
+          <td>${formatRupiah(item.harga_jual)}</td>
+          <td>${formatRupiah(item.keuntungan)}</td>
+          <td class="${item.status === 'lunas' ? 'status-lunas' : 'status-hutang'}">${item.status}</td>
+          <td>
+            <button class="edit-btn" onclick="editData(${index})">Edit</button>
+            <button class="delete-btn" onclick="deleteData(${index})">Hapus</button>
+          </td>
+        `;
+        dataRows.appendChild(row);
+      });
+    }
+
+    function clearInputs() {
+      document.getElementById('nama').value = '';
+      document.getElementById('no_pelanggan').value = '';
+      document.getElementById('jenis').value = '';
+      document.getElementById('harga_beli').value = '';
+      document.getElementById('harga_jual').value = '';
+      document.getElementById('status_pembayaran').value = 'lunas';
+    }
+
+    function exportData() {
+      const data = JSON.stringify(dataPenjualan);
+      const blob = new Blob([data], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'penjualanData.json';
+      link.click();
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (file && file.type === 'application/json') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const importedData = JSON.parse(reader.result);
+            dataPenjualan = importedData;
+            localStorage.setItem('penjualanData', JSON.stringify(dataPenjualan));
+            renderTable();
+          } catch (e) {
+            alert('File tidak valid!');
+          }
+        };
+        reader.readAsText(file);
+      } else {
+        alert('Pilih file JSON yang valid!');
+      }
+    }
+
+    document.getElementById('tambahData').addEventListener('click', addData);
+    renderTable();
+  </script>
+</body>
+</html>
